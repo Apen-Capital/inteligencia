@@ -1,0 +1,17 @@
+# Dados coletados (conteúdo de terceiros — não versionar)
+data/
+
+# Ambiente Python
+.venv/
+__pycache__/
+*.pyc
+
+# Segredos (nunca versionar)
+.env
+.env.local
+.env.*.local
+
+# Front (Next.js)
+web/node_modules/
+web/.next/
+web/out/
