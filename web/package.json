@@ -2,6 +2,7 @@
   "name": "web",
   "version": "0.1.0",
   "private": true,
+  "//security-audit-postcss": "Risco aceito (revisado 2026-07-18): `npm audit` aponta 2 vulnerabilidades moderadas de postcss (GHSA-qx2v-qp2m-jg93, XSS via CSS stringify, CVSS 6.1, corrigido em postcss>=8.5.10). Confirmado que o postcss vulneravel (8.4.31) esta embarcado em node_modules/next/node_modules/postcss -- dependencia transitiva INTERNA do proprio Next.js 16.2.10, nao o postcss usado pelo build do Tailwind deste projeto (esse ja esta em >=8.5.10, ver node_modules/postcss). A CVE so e explorada se postcss stringificar CSS nao confiavel vindo de input de usuario e o resultado for renderizado como HTML; este app so roda postcss sobre o proprio CSS autoral (Tailwind, build-time), nunca sobre CSS de terceiros -- risco teorico, nao explorável no uso atual. NAO seguir a sugestao do `npm audit` de downgrade para next@9.3.3 (retrocesso de major absurdo). Nenhuma acao corretiva necessaria agora; revisitar quando um release futuro do Next.js atualizar sua dependencia interna de postcss para >=8.5.10 (conferir em novo `npm audit` / changelog do Next).",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

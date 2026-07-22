@@ -6,24 +6,16 @@ de publicação. Sites com paywall (ex.: FT, WSJ) tendem a retornar pouco ou
 nenhum texto útil — isso é tratado como status "parcial", não como erro.
 """
 
-import httpx
 import trafilatura
 
-from ..common import HEADERS, MIN_TEXTO_OK, montar_documento
+from ..common import MIN_TEXTO_OK, baixar_pagina, montar_documento
 from ..sources import Fonte
-
-TIMEOUT = 20.0
 
 
 def fetch_article(fonte: Fonte) -> dict:
-    try:
-        resp = httpx.get(fonte.link, headers=HEADERS, timeout=TIMEOUT, follow_redirects=True)
-        resp.raise_for_status()
-    except Exception as exc:
-        return montar_documento(
-            grupo=fonte.grupo, fonte=fonte.fonte, url=fonte.link,
-            status="erro", detalhe=f"falha ao baixar a página: {exc}",
-        )
+    resp, erro = baixar_pagina(fonte)
+    if erro:
+        return erro
 
     extraido = trafilatura.extract(
         resp.text, include_comments=False, with_metadata=True, output_format="json"

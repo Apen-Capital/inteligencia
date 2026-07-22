@@ -10,12 +10,10 @@ import re
 from urllib.parse import parse_qs, urlparse
 
 import feedparser
-import httpx
 
-from ..common import HEADERS, montar_documento
+from ..common import baixar_pagina, montar_documento
 from ..sources import Fonte
 
-TIMEOUT = 20.0
 # Ordem importa: tenta o link canônico primeiro (mais estável), depois "externalId"
 # (o campo "channelId" do JSON embutido não é mais confiável na página atual do YouTube).
 CHANNEL_ID_PATTERNS = [
@@ -33,9 +31,9 @@ def _extrair_channel_id(html: str) -> str | None:
     return None
 
 
-def _resolver_feed_url(link: str) -> tuple[str, str] | None:
+def _resolver_feed_url(fonte: Fonte) -> tuple[str, str] | None:
     """Retorna (tipo, id) — tipo é 'channel_id' ou 'playlist_id' — ou None se não resolver."""
-    parsed = urlparse(link)
+    parsed = urlparse(fonte.link)
     qs = parse_qs(parsed.query)
 
     if "list" in qs:
@@ -45,11 +43,11 @@ def _resolver_feed_url(link: str) -> tuple[str, str] | None:
         channel_id = parsed.path.split("/channel/")[-1].split("/")[0]
         return "channel_id", channel_id
 
-    # Handle (@nome) ou /c/ ou /user/: precisa buscar o channelId na página
-    try:
-        resp = httpx.get(link, headers=HEADERS, timeout=TIMEOUT, follow_redirects=True)
-        resp.raise_for_status()
-    except Exception:
+    # Handle (@nome) ou /c/ ou /user/: precisa buscar o channelId na página.
+    # Em caso de erro de rede, devolvemos None (quem chama, fetch_youtube, já
+    # gera seu próprio documento de erro genérico nesse caso).
+    resp, erro = baixar_pagina(fonte)
+    if erro:
         return None
 
     channel_id = _extrair_channel_id(resp.text)
@@ -59,7 +57,7 @@ def _resolver_feed_url(link: str) -> tuple[str, str] | None:
 
 
 def fetch_youtube(fonte: Fonte) -> dict:
-    resolvido = _resolver_feed_url(fonte.link)
+    resolvido = _resolver_feed_url(fonte)
     if resolvido is None:
         return montar_documento(
             grupo=fonte.grupo, fonte=fonte.fonte, url=fonte.link,
@@ -69,14 +67,9 @@ def fetch_youtube(fonte: Fonte) -> dict:
     tipo, valor = resolvido
     feed_url = f"https://www.youtube.com/feeds/videos.xml?{tipo}={valor}"
 
-    try:
-        resp = httpx.get(feed_url, headers=HEADERS, timeout=TIMEOUT)
-        resp.raise_for_status()
-    except Exception as exc:
-        return montar_documento(
-            grupo=fonte.grupo, fonte=fonte.fonte, url=fonte.link,
-            status="erro", detalhe=f"falha ao baixar feed RSS: {exc}",
-        )
+    resp, erro = baixar_pagina(fonte, url=feed_url)
+    if erro:
+        return erro
 
     feed = feedparser.parse(resp.content)
     entradas = feed.entries[:15]

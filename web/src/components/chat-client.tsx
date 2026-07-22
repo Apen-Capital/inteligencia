@@ -31,9 +31,12 @@ export function ChatClient() {
         body: JSON.stringify({ mensagem: texto }),
       });
       const dados = await resposta.json();
+      const textoResposta = resposta.ok
+        ? dados.resposta
+        : (dados.erro ?? "Erro ao processar a mensagem.");
       setMensagens((atuais) => [
         ...atuais,
-        { papel: "assistente", texto: dados.resposta },
+        { papel: "assistente", texto: textoResposta },
       ]);
     } catch {
       setMensagens((atuais) => [

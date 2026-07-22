@@ -2,7 +2,24 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/*
+ * FIX (review 2026-07-18): a linha `@custom-variant dark (&:is(.dark *));` foi removida.
+ * Ela redefinia o variant `dark:` do Tailwind v4 para depender de um ancestral com
+ * classe `.dark`, mas nada no projeto adiciona essa classe ao <html>/<body> (sem
+ * next-themes / ThemeProvider / toggle manual) — logo todas as classes `dark:` em
+ * app/ e components/ eram código morto, e o usuário sempre via o modo claro.
+ *
+ * Com a linha removida, o Tailwind v4 volta ao comportamento padrão do variant
+ * `dark:`, baseado em `prefers-color-scheme` — o SO/navegador do usuário passa a
+ * decidir o tema automaticamente, ativando as classes `dark:` já existentes.
+ *
+ * TODO (requer decisao de produto, nao implementado aqui): se o time preferir um
+ * toggle manual de tema (persistente, independente do SO) em vez de seguir o SO,
+ * será necessário reintroduzir `@custom-variant dark (&:is(.dark *));` e configurar
+ * um ThemeProvider (ex.: next-themes com attribute="class") em layout.tsx, mais um
+ * botão de alternância na UI. Não implementado aqui por ser decisão de produto/UX,
+ * não uma correção de CSS.
+ */
 
 @theme inline {
   --color-background: var(--background);

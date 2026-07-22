@@ -33,7 +33,25 @@ def _client():
 
 def salvar_documento(documento: dict) -> None:
     """Insere um documento coletado na tabela `documentos`. Silenciosamente
-    pulado (com aviso) se as credenciais não estiverem configuradas."""
+    pulado (com aviso) se as credenciais não estiverem configuradas.
+
+    TODO (requer decisão de produto, não implementado aqui): este insert é
+    sempre um append simples — a tabela `documentos` não tem constraint
+    única além do `id` (uuid, gerado automaticamente), então reexecutar o
+    coletor no mesmo dia (ex.: reprocessar fontes que deram erro, ou um
+    futuro cron disparando em duplicidade) insere linhas duplicadas para a
+    mesma fonte/documento em vez de atualizar a existente. Duas opções,
+    a confirmar com o time antes de mexer no schema em produção:
+      1) Manter como log append-only (uma linha por execução, mesmo que no
+         mesmo dia) — comportamento atual já é isso; só falta documentar a
+         decisão explicitamente (README/CLAUDE.md) para quem consumir a
+         tabela em web/relatorios saber que pode haver múltiplas linhas por
+         fonte/dia.
+      2) Trocar para "um snapshot por fonte por dia/documento": exigiria
+         adicionar um índice único na tabela (ex.: em (fonte, url,
+         date_trunc('day', data_coleta)) ou (fonte, url, data_publicacao))
+         e trocar `.insert()` por `.upsert(..., on_conflict=...)`.
+    """
     client = _client()
     if client is None:
         return
@@ -44,6 +62,7 @@ def salvar_documento(documento: dict) -> None:
         "url": documento["url"],
         "titulo": documento.get("titulo"),
         "texto": documento.get("texto"),
+        "data_coleta": documento.get("data_coleta"),
         "data_publicacao": documento.get("data_publicacao"),
         "status": documento["status"],
         "detalhe": documento.get("detalhe"),

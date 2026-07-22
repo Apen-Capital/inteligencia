@@ -4,7 +4,24 @@ import { NextResponse } from "next/server";
 // geração via Claude). Ver README.md, seção "Decisões — Supabase e Front",
 // para o passo a passo de como habilitar isso quando a VOYAGE_API_KEY existir.
 export async function POST(request: Request) {
-  const { mensagem } = await request.json();
+  let corpo: unknown;
+  try {
+    corpo = await request.json();
+  } catch {
+    return NextResponse.json(
+      { erro: "Corpo da requisição inválido, esperado JSON." },
+      { status: 400 }
+    );
+  }
+
+  if (!corpo || typeof corpo !== "object") {
+    return NextResponse.json(
+      { erro: "Corpo da requisição inválido, esperado JSON." },
+      { status: 400 }
+    );
+  }
+
+  const { mensagem } = corpo as { mensagem?: unknown };
 
   if (!mensagem || typeof mensagem !== "string") {
     return NextResponse.json(

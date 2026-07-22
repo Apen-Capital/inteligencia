@@ -18,7 +18,7 @@ import time
 from datetime import date
 from pathlib import Path
 
-from .common import slugify
+from .common import montar_documento, slugify
 from .fetchers.article_fetcher import fetch_article
 from .fetchers.market_data_fetcher import fetch_market_page
 from .fetchers.youtube_fetcher import fetch_youtube
@@ -58,17 +58,24 @@ def main() -> int:
         try:
             documento = fetcher(fonte)
         except Exception as exc:  # nunca deixa uma fonte derrubar o pipeline inteiro
-            documento = {
-                "grupo": fonte.grupo, "fonte": fonte.fonte, "url": fonte.link,
-                "status": "erro", "detalhe": f"exceção não tratada: {exc}",
-            }
+            documento = montar_documento(
+                grupo=fonte.grupo,
+                fonte=fonte.fonte,
+                url=fonte.link,
+                status="erro",
+                detalhe=f"exceção não tratada: {exc}",
+            )
 
         status = documento.get("status", "erro")
         resultados.setdefault(status, []).append(fonte.fonte)
 
         arquivo_saida = saida_dir / f"{slugify(fonte.fonte)}.json"
         arquivo_saida.write_text(json.dumps(documento, ensure_ascii=False, indent=2), encoding="utf-8")
-        salvar_documento(documento)
+
+        try:
+            salvar_documento(documento)
+        except Exception as exc:  # nunca deixa uma falha de gravação (ex.: client Supabase malformado) derrubar o pipeline inteiro
+            print(f"[AVISO] falha ao salvar '{fonte.fonte}' no Supabase: {exc}")
 
         if i < len(fontes) - 1:
             time.sleep(DELAY_ENTRE_REQUISICOES)

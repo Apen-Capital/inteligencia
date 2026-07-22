@@ -23,7 +23,7 @@ Lista fixa de emails internos do time de inteligência (a definir a lista exata 
 
 ## Arquitetura
 
-- **Banco de dados / infra**: **Supabase** (Postgres gerenciado, acesso via API/web para o time). Definido. Projeto ativo: `apen-inteligencia` (org da empresa, região `sa-east-1`) — ver "Decisões — Supabase e Front" abaixo.
+- **Banco de dados / infra**: **Supabase** (Postgres gerenciado, acesso via API/web para o time). Definido. Projeto ativo: `inteligencia` (org própria `marcuscav-apencapital`, região `us-west-2`) — ver "Decisões — Troca para conta Supabase própria" abaixo.
 - **Estrutura dos relatórios**: não é definida por este time — vem de fora (a ser recebida/consumida como está).
 - **Coleta de dados**: **Python** (definido). Sites de notícia via `httpx` + `trafilatura` (extração de texto principal); dados de mercado via snapshot de página; canais do YouTube via feed RSS público (sem API key). Login automático nas plataformas pagas (XP, BTG, Nord) ainda não implementado — ver "Decisões — Coleta automatizada" abaixo.
   - Credenciais de login **nunca** em texto puro no código/repositório — usar variáveis de ambiente/secrets manager.
@@ -45,7 +45,7 @@ Contexto: o time ainda não tem acesso ao banco Supabase, então o trabalho atua
 
 - **Supabase real, projeto próprio**: durante a investigação, descobrimos que o MCP do Supabase já conectado neste ambiente é a conta oficial da empresa (org de `eduardoramos@apencapital.com.br`, confirmado com ele) — não uma conta pessoal. Essa org já tinha um projeto `pipeline_iniciativas` com tabelas de um app não relacionado (`usuarios`, `iniciativas`, etc.) — por isso criamos um **projeto novo e separado**, `apen-inteligencia` (região `sa-east-1`, custo US$ 0/mês), para não misturar schemas.
 - **Schema inicial**: tabela `documentos` (mesmo formato usado pelo coletor Python — grupo, fonte, url, título, texto, status, datas). RLS habilitada, com leitura pública (dado é notícia pública, sem PII de cliente) e sem policy de insert pública — só o coletor Python (via `service_role`) grava. Extensão `pgvector` já habilitada, sem uso ainda (prepara pro RAG futuro).
-- **Coletor Python grava no Supabase**: `collector/supabase_sink.py` faz upsert de cada documento coletado, além de manter o JSON local. Sem `SUPABASE_SERVICE_ROLE_KEY` configurada em `.env`, a gravação é pulada com aviso (a coleta local continua funcionando normalmente).
+- **Coletor Python grava no Supabase**: `collector/supabase_sink.py` faz um `insert` simples de cada documento coletado (log append-only — não há upsert nem constraint única além do `id`; reexecutar o coletor no mesmo dia gera novas linhas em vez de atualizar as existentes, ver TODO em `supabase_sink.py`), além de manter o JSON local. Sem `SUPABASE_SERVICE_ROLE_KEY` configurada em `.env`, a gravação é pulada com aviso (a coleta local continua funcionando normalmente).
 - **Front básico (`web/`)**: Next.js + shadcn/ui + Tailwind, duas abas:
   - **Gestão de Relatórios** (`/relatorios`): lista os documentos brutos da tabela `documentos` — não uma estrutura de relatório final, que ainda não foi recebida.
   - **Chat Bot** (`/chat`): interface pronta; o backend (`/api/chat`) é um stub até a integração real com Voyage AI (busca semântica) existir.
@@ -57,12 +57,34 @@ Contexto: o time ainda não tem acesso ao banco Supabase, então o trabalho atua
   4. Free tier vigente na época da pesquisa: 50M tokens grátis no `voyage-finance-2` — conferir valor atual em [docs.voyageai.com/docs/pricing](https://docs.voyageai.com/docs/pricing) antes de assumir.
   5. A integração de verdade (embeddings dos documentos + busca semântica no `/api/chat`) é um próximo passo, depois que a chave existir.
 
+## Decisões — Revisão final pré-lançamento — 2026-07-19
+
+Varredura completa do código (coletor + Supabase + front), com achados verificados adversarialmente antes de qualquer correção ser aplicada. 11 problemas reais corrigidos, entre eles: falha no coletor que derrubava a coleta inteira se a gravação no Supabase desse erro; documento de erro incompleto quando um fetcher lançava exceção não tratada; `data_coleta` sendo descartado antes do insert no Supabase; modo escuro completamente inerte no front (classes `dark:` nunca ativavam); `/api/chat` retornando erro 500 cru para corpo inválido em vez de 400; chat não mostrava a mensagem de erro real da API; duplicação de código entre os 3 fetchers eliminada com um helper único (`baixar_pagina` em `collector/common.py`).
+
+Também corrigido ao vivo no Supabase: a extensão `pgvector` estava no schema `public` (WARN de segurança do próprio Supabase Advisor) — movida para um schema `extensions` dedicado, sem perda de dado (tabela ainda não usa colunas vetoriais).
+
+**Decisões que ficaram em aberto, para o dono do projeto (não implementadas de forma unilateral):**
+- **Modo escuro**: hoje segue automaticamente o SO/navegador do usuário (`prefers-color-scheme`). Se quiser um toggle manual em vez disso, precisa de um `ThemeProvider` (ex. `next-themes`) — não implementado, é decisão de UX.
+- **Modelo de dados da tabela `documentos`**: hoje é um log append-only (cada execução do coletor insere novas linhas, mesmo repetindo fonte no mesmo dia). Se o certo for "um snapshot por fonte por dia", precisa de uma migração de schema (índice único + trocar `insert` por `upsert`) — ver TODO em `collector/supabase_sink.py`.
+- **Autenticação do front**: continua sem auth (ver acima). Não implementada nesta revisão por ser decisão de produto, não bug.
+- **Rate limiting em `/api/chat`**: inofensivo hoje (endpoint é stub, sem custo), mas vira risco real de abuso assim que a integração com Voyage AI/LLM for ligada — sinalizado para quando isso acontecer.
+- **`web/README.md`** continua sendo o boilerplate padrão do `create-next-app`, sem customização — cosmético, não bloqueia lançamento.
+
+## Decisões — Troca para conta Supabase própria — 2026-07-22
+
+- **Motivo da troca**: o projeto `apen-inteligencia` vivia na conta pessoal do Eduardo (org `eduardoramos@apencapital.com.br`), usada só porque era a conta conectada no ambiente na época. Decidimos migrar para uma conta própria do projeto: `marcuscav-apencapital`. O projeto antigo foi removido (fora do nosso controle, constatado já removido — não havia dado real nele, então sem perda).
+- **Projeto novo**: `inteligencia` (id `oxwzoeujpyumnbmidwwe`, região `us-west-2` — nota: diferente do `sa-east-1` do projeto anterior; dado é notícia pública/scraping, não há requisito de residência de dados no Brasil identificado até agora, mas vale revisitar se isso mudar). Já conectado ao repositório GitHub do projeto pelo próprio Supabase.
+- **Conexão isolada por projeto**: em vez do conector de conta do claude.ai (que é global, vale para todos os projetos do usuário), configuramos um servidor MCP dedicado (`supabase-inteligencia`, escopo `local` no Claude Code — arquivo `~/.claude.json`, não versionado) com um Personal Access Token da conta `marcuscav-apencapital`. Isso isola o acesso Supabase deste projeto de qualquer outro projeto na mesma máquina.
+- **Schema recriado do zero**: mesma tabela `documentos` + RLS de leitura pública, `pgvector` já instalado direto no schema `extensions` (evitando o WARN de segurança que corrigimos manualmente da vez passada). SQL versionado em [`supabase/migrations/20260722000000_criar_tabela_documentos.sql`](supabase/migrations/20260722000000_criar_tabela_documentos.sql).
+- **Achado novo, não resolvido**: o Supabase Advisor aponta um WARN sobre uma função `public.rls_auto_enable()` (provisionada pelo próprio Supabase, liga RLS automaticamente em tabelas novas — mecanismo de proteção, não algo que criamos) ser executável via RPC por `anon`/`authenticated`. Tentei revogar essa permissão e fui bloqueado pelo classificador de segurança do Claude Code (mudança de permissão fora do escopo do que este projeto criou). Baixo risco, mas fica registrado — avaliar com calma se vale revogar manualmente.
+
 ## Próximos passos
 
 1. Mapear lista completa de plataformas/fontes por tipo de relatório. ✅ feito para as fontes hoje usadas (`collector/sources.py`); reavaliar quando surgirem novas fontes.
 2. Escolher stack de coleta de dados (linguagem/framework) e mecanismo de agendamento. ✅ Python decidido; agendamento (cron/scheduler) ainda em aberto.
 3. Definir lista de destinatários e horário fixo de envio.
 4. Implementar coleta das 3 plataformas com login (XP, BTG, Nord) — definir gestão de credenciais.
-5. Preencher `SUPABASE_SERVICE_ROLE_KEY` em `.env` e rodar `python -m collector.run` para popular a tabela `documentos` com dados reais.
-6. Configurar `VOYAGE_API_KEY` e implementar a busca semântica real no `/api/chat` (embeddings dos documentos coletados).
+5. **Preencher `SUPABASE_SERVICE_ROLE_KEY` em `.env`** com a chave do projeto `inteligencia` (ainda vazio — a tabela `documentos` continua com 0 linhas) e rodar `python -m collector.run` para popular dados reais.
+6. `VOYAGE_API_KEY` já configurada em `.env`, mas ainda não usada em nenhum código — implementar a busca semântica real no `/api/chat` é o próximo passo.
 7. Definir autenticação do front antes de qualquer deploy público.
+8. Decidir o modelo de dados de `documentos` (log append-only vs. upsert por snapshot) — ver seção acima.
