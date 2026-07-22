@@ -3,30 +3,23 @@
 @import "shadcn/tailwind.css";
 
 /*
- * FIX (review 2026-07-18): a linha `@custom-variant dark (&:is(.dark *));` foi removida.
- * Ela redefinia o variant `dark:` do Tailwind v4 para depender de um ancestral com
- * classe `.dark`, mas nada no projeto adiciona essa classe ao <html>/<body> (sem
- * next-themes / ThemeProvider / toggle manual) — logo todas as classes `dark:` em
- * app/ e components/ eram código morto, e o usuário sempre via o modo claro.
- *
- * Com a linha removida, o Tailwind v4 volta ao comportamento padrão do variant
- * `dark:`, baseado em `prefers-color-scheme` — o SO/navegador do usuário passa a
- * decidir o tema automaticamente, ativando as classes `dark:` já existentes.
- *
- * TODO (requer decisao de produto, nao implementado aqui): se o time preferir um
- * toggle manual de tema (persistente, independente do SO) em vez de seguir o SO,
- * será necessário reintroduzir `@custom-variant dark (&:is(.dark *));` e configurar
- * um ThemeProvider (ex.: next-themes com attribute="class") em layout.tsx, mais um
- * botão de alternância na UI. Não implementado aqui por ser decisão de produto/UX,
- * não uma correção de CSS.
+ * Identidade visual (redesign 2026-07-22, /frontend-design): terminal de
+ * inteligência financeira — grafite-marinho quase preto + acento
+ * dourado-latão, serifada editorial (Fraunces) para títulos, grotesk técnica
+ * (IBM Plex Sans) pro corpo, monoespaçada (IBM Plex Mono) pra dados/status.
+ * Escuro fixo por decisão de design (não segue o SO) — o tom é deliberado
+ * (terminal de mercado), não teria o mesmo efeito num tema claro.
  */
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: var(--font-plex-sans);
+  --font-display: var(--font-fraunces);
+  --font-mono: var(--font-plex-mono);
+  --color-status-ok: var(--status-ok);
+  --color-status-parcial: var(--status-parcial);
+  --color-status-erro: var(--status-erro);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -66,72 +59,41 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #0b0e14;
+  --foreground: #e8e6e0;
+  --card: #12161f;
+  --card-foreground: #e8e6e0;
+  --popover: #12161f;
+  --popover-foreground: #e8e6e0;
+  --primary: #c89b3c;
+  --primary-foreground: #0b0e14;
+  --secondary: #1a1f2b;
+  --secondary-foreground: #e8e6e0;
+  --muted: #171b25;
+  --muted-foreground: #8a8f98;
+  --accent: #1a1f2b;
+  --accent-foreground: #c89b3c;
+  --destructive: #a6544a;
+  --border: color-mix(in oklab, #e8e6e0 12%, transparent);
+  --input: color-mix(in oklab, #e8e6e0 16%, transparent);
+  --ring: #c89b3c;
+  --status-ok: #6fa885;
+  --status-parcial: #c89b3c;
+  --status-erro: #c06a5c;
+  --chart-1: #c89b3c;
+  --chart-2: #6fa885;
+  --chart-3: #c06a5c;
+  --chart-4: #8a8f98;
+  --chart-5: #4a5568;
+  --radius: 0.375rem;
+  --sidebar: #0b0e14;
+  --sidebar-foreground: #e8e6e0;
+  --sidebar-primary: #c89b3c;
+  --sidebar-primary-foreground: #0b0e14;
+  --sidebar-accent: #1a1f2b;
+  --sidebar-accent-foreground: #e8e6e0;
+  --sidebar-border: color-mix(in oklab, #e8e6e0 12%, transparent);
+  --sidebar-ring: #c89b3c;
 }
 
 @layer base {
@@ -143,5 +105,26 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* Ticker de manchetes (elemento de assinatura) — rola manchetes reais
+   coletadas, da direita pra esquerda, em loop contínuo. */
+@keyframes ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-track {
+  animation: ticker-scroll 60s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none;
   }
 }

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status do projeto
 
-Protótipo revisado de ponta a ponta (varredura completa em 2026-07-19, 11 correções aplicadas e verificadas — ver README.md, seção "Decisões — Revisão final pré-lançamento"). Coleta em Python (`collector/`) sabe gravar na tabela `documentos` de um Supabase real (projeto `inteligencia`), mas isso **ainda não foi exercitado com dados reais** — `SUPABASE_SERVICE_ROLE_KEY` continua vazia em `.env`, então a tabela tem 0 linhas hoje. Um front básico em Next.js (`web/`) já lê essa tabela (testado, lida bem com tabela vazia). Estrutura final dos relatórios ainda não foi recebida (ver README.md) e o RAG/chat real depende da Voyage AI (`VOYAGE_API_KEY` já configurada em `.env`, mas ainda não usada em nenhum código).
+Protótipo com busca semântica real de ponta a ponta. Coleta em Python (`collector/`) grava na tabela `documentos` do Supabase (projeto `inteligencia`) e gera embeddings via Voyage AI (`voyage-finance-2`) automaticamente. `/api/chat` embeda a pergunta do usuário e busca os documentos mais similares via `pgvector` — testado ao vivo, funcionando. **Falta só a geração de resposta em linguagem natural** (precisa de `ANTHROPIC_API_KEY`, ainda não configurada — decisão do usuário de seguir sem isso por enquanto); até lá o chat mostra os trechos recuperados, não uma resposta gerada. Front redesenhado (`/frontend-design`, 2026-07-22): tema escuro fixo, tipografia Fraunces/IBM Plex, ticker de manchetes reais como assinatura visual. Estrutura final dos relatórios ainda não foi recebida (ver README.md).
 
 ## Comandos
 
@@ -14,10 +14,11 @@ python -m venv .venv
 .venv/Scripts/activate   # Windows (bash: source .venv/Scripts/activate)
 pip install -r requirements.txt
 
-python -m collector.run          # roda o protótipo de coleta (fontes abertas) e grava no Supabase
-python -m collector.sources       # imprime o inventário de fontes por grupo
+python -m collector.run                    # roda o protótipo de coleta (fontes abertas), grava no Supabase e gera embeddings
+python -m collector.sources                 # imprime o inventário de fontes por grupo
+python -m collector.backfill_embeddings     # gera embedding para documentos já gravados que ainda não têm (rodar de novo se sobrar algum — a Voyage tem rate limit baixo em conta nova, 429)
 ```
-Requer `.env` (copiar de `.env.example`) com `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` para gravar no Supabase — sem isso, só salva local em `data/raw/`.
+Requer `.env` (copiar de `.env.example`) com `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` para gravar no Supabase, e `VOYAGE_API_KEY` para gerar embeddings — sem elas, a etapa correspondente é pulada com aviso (nunca quebra a coleta local).
 
 Front (Next.js, em `web/`):
 ```bash
@@ -39,17 +40,25 @@ Não há testes automatizados configurados ainda neste protótipo (lint do Next.
 - `fetchers/youtube_fetcher.py` — resolve `channel_id`/`playlist_id` a partir da URL (sem API key) e lê o feed RSS público do YouTube para listar uploads recentes.
 - `run.py` — orquestrador (`python -m collector.run`): despacha cada fonte de `fontes_mvp()` para o fetcher do seu grupo, aplica delay entre requisições, salva cada resultado em `data/raw/<AAAA-MM-DD>/<fonte-slug>.json`, grava no Supabase (`salvar_documento`, com try/except próprio — uma falha de gravação não derruba a coleta das fontes seguintes) e imprime um resumo ok/parcial/erro. **`data/` não é versionado** (conteúdo de terceiros).
 - As 3 fontes com login (XP, BTG, Nord) aparecem em `sources.py` mas são puladas pelo `run.py` — implementá-las exige decidir gestão de credenciais primeiro.
-- `supabase_sink.py` — grava cada documento na tabela `documentos` do Supabase via `service_role` key (env var); pulado (com aviso, sem quebrar a coleta local) se as credenciais não estiverem em `.env`. Faz `insert` simples (log append-only, sem upsert/constraint única — ver TODO no arquivo, decisão de produto em aberto).
+- `supabase_sink.py` — grava cada documento na tabela `documentos` do Supabase via `service_role` key (env var); pulado (com aviso, sem quebrar a coleta local) se as credenciais não estiverem em `.env`. Faz `insert` simples (log append-only, sem upsert/constraint única — ver TODO no arquivo, decisão de produto em aberto). Inclui o embedding (via `embeddings.gerar_embedding`) no mesmo insert.
+- `embeddings.py` — chama a API REST da Voyage AI diretamente (`voyage-finance-2`, sem SDK) para gerar o vetor de embedding de um texto. Retorna `None` (não lança exceção) se `VOYAGE_API_KEY` ausente, texto vazio, ou a chamada falhar.
+- `backfill_embeddings.py` — script standalone (`python -m collector.backfill_embeddings`) que gera embedding pra documentos já no Supabase sem um. Delay de 15s entre chamadas — a Voyage tem rate limit baixo em contas novas (429); rodar de novo se sobrar algum.
 
 ## Arquitetura do front (`web/`)
 
-Next.js (App Router) + shadcn/ui + Tailwind. Sem autenticação nesta versão (reavaliar antes de deploy público).
+Next.js (App Router) + shadcn/ui + Tailwind. Sem autenticação nesta versão (reavaliar antes de deploy público). Identidade visual própria desde 2026-07-22 (via skill `/frontend-design`) — ver seção de design abaixo.
 
 - `src/lib/supabase.ts` — client Supabase (browser/server, chave publicável) + tipo `Documento`.
+- `src/lib/voyage.ts` — `embedarConsulta()`: chama a API REST da Voyage direto (fetch nativo, sem SDK) pra gerar o embedding da pergunta do usuário.
+- `src/components/ticker.tsx` — Server Component que busca as manchetes mais recentes (`fonte`+`titulo`) e renderiza a ticker tape (elemento de assinatura do design, ver `globals.css`/`.ticker-track`).
 - `src/app/relatorios/page.tsx` — aba "Gestão de Relatórios": Server Component, lê a tabela `documentos` direto (RLS permite leitura pública). Mostra os documentos brutos coletados, não uma estrutura de relatório final (que ainda não existe).
-- `src/app/chat/page.tsx` + `src/components/chat-client.tsx` — aba "Chat Bot": UI completa (histórico + input).
-- `src/app/api/chat/route.ts` — stub: responde avisando que a integração real (busca semântica via Voyage AI) ainda não existe. Valida corpo da requisição (400 em JSON inválido/não-objeto/campo ausente) antes de responder. Implementar de verdade é o próximo passo, agora que `VOYAGE_API_KEY` já está configurada.
-- `src/app/globals.css` — modo escuro segue `prefers-color-scheme` (SO/navegador), sem toggle manual (removeria/precisaria de `next-themes` se quiser um).
+- `src/app/chat/page.tsx` + `src/components/chat-client.tsx` — aba "Chat": UI com histórico + input; renderiza os resultados da busca semântica (fonte, título, trecho, similaridade) além da mensagem de status.
+- `src/app/api/chat/route.ts` — **busca semântica real**: valida corpo (400 em JSON inválido/não-objeto/campo ausente) → `embedarConsulta()` (Voyage) → RPC `match_documentos` no Supabase → retorna `{ resposta, resultados[] }`. Sem `VOYAGE_API_KEY`, cai no aviso antigo (stub). **Geração de resposta em linguagem natural via Claude ainda não implementada** — falta `ANTHROPIC_API_KEY` (decisão do usuário, não bug).
+- `src/app/globals.css` — tema escuro fixo (não segue mais o SO — decisão de design revista em 2026-07-22), tokens de cor/fonte do redesign, animação da ticker tape (`prefers-reduced-motion` respeitado).
+
+## Identidade visual (`web/`)
+
+"Terminal de inteligência financeira" — fundo `#0B0E14`, superfícies `#12161F`, acento dourado-latão `#C89B3C` (não o verde/vermelho neon padrão de tema escuro), status semânticos via `--color-status-{ok,parcial,erro}` (definidos em `globals.css`, usados com `variant="outline"` do `Badge`, não os variants genéricos default/secondary/destructive). Fraunces (`font-display`, títulos), IBM Plex Sans (`font-sans`, corpo), IBM Plex Mono (`font-mono`, dados/timestamps/status). Tema escuro é fixo (não alterna com o SO). Componentes shadcn não usados no app foram removidos (`avatar`, `card`, `scroll-area`, `separator`, `table`, `tabs`) — só `badge`, `button`, `textarea` continuam.
 
 ## O que este projeto faz
 
@@ -71,11 +80,10 @@ Fluxo em 4 passos:
 
 ## Próximos passos (em aberto, ver README.md)
 
-1. **Preencher `SUPABASE_SERVICE_ROLE_KEY` em `.env`** (ainda vazio) e rodar `python -m collector.run` para popular `documentos` com dados reais — sem isso, `/relatorios` continua vazio.
-2. `VOYAGE_API_KEY` já configurada — implementar busca semântica real no `/api/chat`.
-3. Definir lista de destinatários e horário fixo de envio do relatório diário.
-4. Definir autenticação do front antes de qualquer deploy público.
-5. Decidir modelo de dados de `documentos` (log append-only vs. upsert por snapshot — ver TODO em `supabase_sink.py`).
+1. Configurar `ANTHROPIC_API_KEY` (console.anthropic.com, independente da conta claude.ai) para implementar a geração de resposta em linguagem natural no `/api/chat` — hoje só mostra os documentos recuperados.
+2. Definir lista de destinatários e horário fixo de envio do relatório diário.
+3. Definir autenticação do front antes de qualquer deploy público.
+4. Decidir modelo de dados de `documentos` (log append-only vs. upsert por snapshot — ver TODO em `supabase_sink.py`).
 
 ## Skills configuradas no projeto
 

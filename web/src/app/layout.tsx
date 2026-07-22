@@ -1,16 +1,26 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Fraunces, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import Link from "next/link";
+import { Ticker } from "@/components/ticker";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
   subsets: ["latin"],
+  style: ["normal", "italic"],
+  axes: ["opsz", "SOFT", "WONK"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-plex-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
+
+const plexMono = IBM_Plex_Mono({
+  variable: "--font-plex-mono",
+  subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
@@ -26,33 +36,39 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${fraunces.variable} ${plexSans.variable} ${plexMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-zinc-50 dark:bg-zinc-950">
-        <header className="border-b bg-white dark:bg-zinc-900 dark:border-zinc-800">
-          <div className="mx-auto flex max-w-5xl items-center gap-6 px-6 py-4">
-            <span className="font-semibold text-zinc-900 dark:text-zinc-50">
-              Apen Inteligência
+      <body className="min-h-full flex flex-col bg-background text-foreground">
+        <header className="border-b border-border">
+          <div className="mx-auto flex max-w-6xl items-center gap-8 px-6 py-5">
+            <span className="font-display text-lg tracking-tight text-foreground">
+              Apen <em className="not-italic text-primary">Inteligência</em>
             </span>
-            <nav className="flex gap-4 text-sm">
+            <nav className="flex gap-6 font-mono text-xs uppercase tracking-widest">
               <Link
                 href="/relatorios"
-                className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
+                className="text-muted-foreground transition-colors hover:text-primary"
               >
-                Gestão de Relatórios
+                Relatórios
               </Link>
               <Link
                 href="/chat"
-                className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
+                className="text-muted-foreground transition-colors hover:text-primary"
               >
-                Chat Bot
+                Chat
               </Link>
             </nav>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">
+        <Ticker />
+        <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
           {children}
         </main>
+        <footer className="border-t border-border py-4">
+          <p className="mx-auto max-w-6xl px-6 font-mono text-[11px] tracking-wide text-muted-foreground">
+            Apen Capital · time de inteligência · uso interno
+          </p>
+        </footer>
       </body>
     </html>
   );

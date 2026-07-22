@@ -11,6 +11,8 @@ import os
 
 from dotenv import load_dotenv
 
+from .embeddings import gerar_embedding
+
 load_dotenv()
 
 _AVISO_JA_MOSTRADO = False
@@ -66,6 +68,7 @@ def salvar_documento(documento: dict) -> None:
         "data_publicacao": documento.get("data_publicacao"),
         "status": documento["status"],
         "detalhe": documento.get("detalhe"),
+        "embedding": gerar_embedding(documento.get("texto") or ""),
     }
     try:
         client.table("documentos").insert(linha).execute()

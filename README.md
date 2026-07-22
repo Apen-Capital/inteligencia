@@ -78,13 +78,23 @@ Também corrigido ao vivo no Supabase: a extensão `pgvector` estava no schema `
 - **Schema recriado do zero**: mesma tabela `documentos` + RLS de leitura pública, `pgvector` já instalado direto no schema `extensions` (evitando o WARN de segurança que corrigimos manualmente da vez passada). SQL versionado em [`supabase/migrations/20260722000000_criar_tabela_documentos.sql`](supabase/migrations/20260722000000_criar_tabela_documentos.sql).
 - **Achado novo, não resolvido**: o Supabase Advisor aponta um WARN sobre uma função `public.rls_auto_enable()` (provisionada pelo próprio Supabase, liga RLS automaticamente em tabelas novas — mecanismo de proteção, não algo que criamos) ser executável via RPC por `anon`/`authenticated`. Tentei revogar essa permissão e fui bloqueado pelo classificador de segurança do Claude Code (mudança de permissão fora do escopo do que este projeto criou). Baixo risco, mas fica registrado — avaliar com calma se vale revogar manualmente.
 
+## Decisões — Integração real com Voyage AI e redesign visual — 2026-07-22
+
+- **Busca semântica real, de ponta a ponta**: `documentos` ganhou coluna `embedding vector(1024)` (modelo `voyage-finance-2`) + índice HNSW + função `match_documentos` (busca por similaridade de cosseno) — ver [`supabase/migrations/20260722010000_adicionar_embedding_e_match_function.sql`](supabase/migrations/20260722010000_adicionar_embedding_e_match_function.sql).
+  - `collector/embeddings.py`: gera o embedding de cada documento coletado (chamada direta à API REST da Voyage, sem SDK extra) — integrado a `supabase_sink.py`, roda automaticamente a cada coleta.
+  - `collector/backfill_embeddings.py`: preenche embedding dos documentos já gravados sem ele (rodar quando necessário: `python -m collector.backfill_embeddings`). **Tem rate limit baixo na Voyage** (429 em contas novas) — o script já tem delay de 15s entre chamadas; rodar mais de uma vez se sobrar algum documento sem embedding.
+  - `/api/chat` agora embeda a pergunta do usuário e busca os 5 documentos mais similares de verdade — testado ao vivo, retornando resultados reais com score de similaridade.
+- **Geração de resposta em linguagem natural: ainda não implementada, por decisão do usuário.** A Voyage só faz embeddings/busca — gerar uma resposta em texto corrido exigiria uma chave de API da Anthropic (`ANTHROPIC_API_KEY`, obtida em console.anthropic.com, **independente** da conta/assinatura Claude Pro do claude.ai — não consome o limite de mensagens do Pro). Sem essa chave, o chat mostra os trechos mais relevantes encontrados (fonte, título, trecho, similaridade), sem fingir uma resposta gerada.
+- **Redesign visual completo** (via skill `/frontend-design`): identidade própria de "terminal de inteligência financeira" — fundo grafite-marinho quase preto (`#0B0E14`) com acento dourado-latão (`#C89B3C`), tipografia Fraunces (títulos, serifada editorial) + IBM Plex Sans (corpo) + IBM Plex Mono (dados/status). **Tema escuro fixo, por decisão de design** (não segue mais o SO/navegador — decisão anterior revista: o tom de terminal não funcionaria bem em tema claro). Elemento de assinatura: uma ticker tape rolando manchetes reais coletadas (fonte — título) no topo de toda página. Componentes shadcn não usados (`avatar`, `separator`, `table`, `tabs`, `scroll-area`, `card`) foram removidos.
+
 ## Próximos passos
 
 1. Mapear lista completa de plataformas/fontes por tipo de relatório. ✅ feito para as fontes hoje usadas (`collector/sources.py`); reavaliar quando surgirem novas fontes.
 2. Escolher stack de coleta de dados (linguagem/framework) e mecanismo de agendamento. ✅ Python decidido; agendamento (cron/scheduler) ainda em aberto.
 3. Definir lista de destinatários e horário fixo de envio.
 4. Implementar coleta das 3 plataformas com login (XP, BTG, Nord) — definir gestão de credenciais.
-5. **Preencher `SUPABASE_SERVICE_ROLE_KEY` em `.env`** com a chave do projeto `inteligencia` (ainda vazio — a tabela `documentos` continua com 0 linhas) e rodar `python -m collector.run` para popular dados reais.
-6. `VOYAGE_API_KEY` já configurada em `.env`, mas ainda não usada em nenhum código — implementar a busca semântica real no `/api/chat` é o próximo passo.
-7. Definir autenticação do front antes de qualquer deploy público.
-8. Decidir o modelo de dados de `documentos` (log append-only vs. upsert por snapshot) — ver seção acima.
+5. ✅ `SUPABASE_SERVICE_ROLE_KEY` preenchida — coletor grava e embeda de verdade no Supabase (18 documentos, 12 com embedding).
+6. ✅ Busca semântica real via Voyage AI implementada no `/api/chat`.
+7. Configurar `ANTHROPIC_API_KEY` (console.anthropic.com) para gerar respostas em linguagem natural a partir dos documentos recuperados — próximo passo do chat.
+8. Definir autenticação do front antes de qualquer deploy público.
+9. Decidir o modelo de dados de `documentos` (log append-only vs. upsert por snapshot) — ver seção "Revisão final pré-lançamento" acima.
